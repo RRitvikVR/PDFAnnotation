@@ -6,7 +6,6 @@
     <title>PDF Annotation Tool</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
-        /* ... (all your CSS styles remain the same) ... */
         * {
             margin: 0;
             padding: 0;
@@ -50,7 +49,7 @@
             cursor: grab;
             transition: all 0.3s ease;
             border: 2px solid transparent;
-            font-size: 24px;
+            font-size: 24px; /* Initial size for palette items */
         }
 
         .icon-item:hover {
@@ -153,39 +152,6 @@
             flex-wrap: wrap;
         }
 
-        .page-controls {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-left: auto;
-        }
-
-        .page-btn {
-            background: #34495e;
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s ease;
-        }
-
-        .page-btn:hover:not(:disabled) {
-            background: #2c3e50;
-        }
-
-        .page-btn:disabled {
-            background: #bdc3c7;
-            cursor: not-allowed;
-        }
-
-        .page-info {
-            font-size: 14px;
-            color: #7f8c8d;
-            margin: 0 10px;
-        }
-
         .file-input-wrapper {
             position: relative;
             overflow: hidden;
@@ -223,15 +189,6 @@
             align-items: center;
         }
 
-        .pdf-container {
-            position: relative;
-            background: white;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            border-radius: 8px;
-            overflow: visible;
-            margin-bottom: 20px;
-        }
-
         .page-container {
             position: relative;
             margin-bottom: 20px;
@@ -254,32 +211,30 @@
             z-index: 200;
         }
 
-        #pdf-canvas {
-            display: block;
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-        }
-
         .annotation-layer {
             position: absolute;
             top: 0;
             left: 0;
-            pointer-events: none;
+            pointer-events: none; 
         }
 
         .annotation {
             position: absolute;
             cursor: move;
-            pointer-events: all;
+            pointer-events: all; 
             z-index: 100;
             user-select: none;
-            transition: transform 0.1s ease;
+            /* transition: transform 0.1s ease; Removed for potentially smoother resize/drag */
             filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
         }
 
         .annotation.icon {
-            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            line-height: 1; 
+            border-radius: 4px; /* Optional: for a slightly rounded icon box */
         }
 
         .annotation.textbox {
@@ -287,13 +242,14 @@
             border: 2px solid #ffc107;
             border-radius: 4px;
             padding: 8px;
-            font-size: 14px;
+            font-size: 14px; 
             font-family: Arial, sans-serif;
-            min-width: 100px;
-            min-height: 30px;
-            resize: both;
-            overflow: auto;
+            min-width: 50px;  
+            min-height: 30px; 
+            resize: both; 
+            overflow: auto; 
             white-space: pre-wrap;
+            box-sizing: border-box; 
         }
 
         .annotation.textbox:focus {
@@ -301,14 +257,11 @@
             border-color: #007bff;
         }
 
-        .annotation:hover {
-            transform: scale(1.05);
-        }
+        /* Removed .annotation:hover transform scale to avoid interference */
 
         .annotation.selected {
             outline: 2px solid #3498db;
             outline-offset: 2px;
-            border-radius: 4px;
         }
 
         .resize-handle {
@@ -318,15 +271,16 @@
             width: 12px;
             height: 12px;
             background: #3498db;
+            border: 1px solid white; 
             border-radius: 50%;
-            cursor: nw-resize;
-            display: none;
+            cursor: nwse-resize; 
+            display: none; 
+            z-index: 101; 
         }
 
         .annotation.selected .resize-handle {
             display: block;
         }
-
         .status {
             padding: 10px 20px;
             background: #ecf0f1;
@@ -334,16 +288,6 @@
             font-size: 14px;
             color: #7f8c8d;
         }
-
-        .drag-preview {
-            position: fixed;
-            font-size: 24px;
-            pointer-events: none;
-            z-index: 10000;
-            opacity: 0.8;
-            filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.5));
-        }
-
         .no-pdf {
             display: flex;
             flex-direction: column;
@@ -401,18 +345,15 @@
 
     <script>
         let pdfDoc = null;
-        let currentPage = 1;
+        // let currentPage = 1; // Less relevant with all pages rendered
         let scale = 1.5;
-        // let canvas = null; // Not needed for multi-page individual canvases
-        // let ctx = null;    // Not needed for multi-page individual canvases
         let annotations = [];
         let selectedAnnotation = null;
         let isDragging = false;
         let isResizing = false;
         let dragOffset = { x: 0, y: 0 };
-        let currentIconSize = 1;
+        let currentIconSize = 1; // Multiplier for initial icon size from slider
 
-        // Initialize PDF.js worker
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
         function updateStatus(message) {
@@ -421,17 +362,13 @@
 
         async function loadPDF(file) {
             if (!file) return;
-
             updateStatus('Loading PDF...');
             document.getElementById('filename').textContent = file.name;
-
             try {
                 const arrayBuffer = await file.arrayBuffer();
                 pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
-
                 document.getElementById('page-info').textContent = `Total pages: ${pdfDoc.numPages}`;
                 updateStatus(`PDF loaded: ${pdfDoc.numPages} pages`);
-
                 await renderAllPages();
             } catch (error) {
                 updateStatus('Error loading PDF: ' + error.message);
@@ -441,12 +378,9 @@
 
         async function renderAllPages() {
             if (!pdfDoc) return;
-
             const viewer = document.getElementById('pdf-viewer');
             viewer.innerHTML = ''; // Clear previous content
-
             updateStatus('Rendering all pages...');
-
             for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
                 try {
                     const page = await pdfDoc.getPage(pageNum);
@@ -455,9 +389,8 @@
                     const pageContainer = document.createElement('div');
                     pageContainer.className = 'page-container';
                     pageContainer.dataset.page = pageNum;
-                    pageContainer.style.width = viewport.width + 'px'; // Ensure page container has dimensions for drop
+                    pageContainer.style.width = viewport.width + 'px';
                     pageContainer.style.height = viewport.height + 'px';
-
 
                     const pageLabel = document.createElement('div');
                     pageLabel.className = 'page-number';
@@ -468,123 +401,92 @@
                     canvas.className = 'pdf-page';
                     canvas.width = viewport.width;
                     canvas.height = viewport.height;
-                    // These styles might be redundant if CSS handles it, but explicit is fine
-                    canvas.style.width = viewport.width + 'px';
-                    canvas.style.height = viewport.height + 'px';
-                    canvas.style.display = 'block';
-                    canvas.style.borderRadius = '8px';
+                    canvas.style.width = viewport.width + 'px'; // For display
+                    canvas.style.height = viewport.height + 'px'; // For display
 
                     const annotationLayer = document.createElement('div');
                     annotationLayer.className = 'annotation-layer';
-                    annotationLayer.dataset.page = pageNum; // Link layer to page
-                    annotationLayer.style.position = 'absolute';
-                    annotationLayer.style.top = '0';
-                    annotationLayer.style.left = '0';
+                    annotationLayer.dataset.page = pageNum;
                     annotationLayer.style.width = viewport.width + 'px';
                     annotationLayer.style.height = viewport.height + 'px';
-                    annotationLayer.style.pointerEvents = 'none'; // Important for canvas clicks
 
                     pageContainer.appendChild(canvas);
                     pageContainer.appendChild(annotationLayer);
                     viewer.appendChild(pageContainer);
 
                     const ctx = canvas.getContext('2d');
-                    await page.render({
-                        canvasContext: ctx,
-                        viewport: viewport
-                    }).promise;
+                    await page.render({ canvasContext: ctx, viewport: viewport }).promise;
 
-                    setupDropZone(pageContainer, pageNum); // Pass the specific pageContainer
-
+                    setupDropZone(pageContainer, pageNum);
                 } catch (error) {
                     console.error(`Error rendering page ${pageNum}:`, error);
-                    updateStatus(`Error rendering page ${pageNum}`);
+                    updateStatus(`Error rendering page ${pageNum}.`);
                 }
             }
-
             renderAnnotations(); // Render any existing annotations after pages are up
             updateStatus(`All ${pdfDoc.numPages} pages rendered`);
         }
 
-
-        function setupDropZone(container, pageNum) { // 'container' is now the pageContainer
+        function setupDropZone(container, pageNum) {
             container.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'copy';
             });
-
             container.addEventListener('drop', (e) => {
                 e.preventDefault();
-                const icon = e.dataTransfer.getData('text/plain');
-
-                if (icon) {
-                    // Make coordinates relative to the pageContainer which is the drop target
-                    const rect = container.getBoundingClientRect(); // rect of the pageContainer
-                    // ClientX/Y is viewport-relative.
-                    // We need to subtract the container's top-left from the viewport.
-                    // However, annotations are positioned relative to the annotation-layer,
-                    // which is at (0,0) of the pageContainer. So direct clientX/Y relative
-                    // to pageContainer is what we want for the annotation's x,y on that page.
-
+                const iconSymbol = e.dataTransfer.getData('text/plain');
+                if (iconSymbol) {
+                    const rect = container.getBoundingClientRect();
                     let x = e.clientX - rect.left;
                     let y = e.clientY - rect.top;
 
-                    // Adjust for scrolling within pdf-viewer if pages are taller than viewport
-                    // This isn't needed if pageContainer itself scrolls, but pdf-viewer scrolls.
-                    // However, annotation X,Y should be relative to ITS parent annotation-layer.
-                    // The calculation of x,y based on `e.clientX - rect.left` where `rect` is
-                    // `pageContainer.getBoundingClientRect()` should already account for scroll,
-                    // as getBoundingClientRect is relative to the viewport.
-
+                    // Debounce/throttle drop to prevent multiple additions
                     const now = Date.now();
                     if (this.lastDropTime && now - this.lastDropTime < 100) {
                         return;
                     }
                     this.lastDropTime = now;
 
-                    if (icon === 'TEXT') {
+                    if (iconSymbol === 'TEXT') {
                         addTextBox(x, y, pageNum);
                     } else {
-                        addAnnotation(icon, x, y, pageNum);
+                        addAnnotation(iconSymbol, x, y, pageNum); // For icons
                     }
                 }
             });
         }
 
-
-        function addAnnotation(icon, x, y, pageNum) {
+        function addAnnotation(iconSymbol, x, y, pageNum) { // For Icons
+            const baseSize = 24; // Base pixel size for an icon at currentIconSize = 1
             const annotation = {
-                id: Date.now() + Math.random(), // Unique ID
+                id: Date.now() + Math.random().toString(36).substr(2, 9), // More robust ID
                 type: 'icon',
-                icon: icon,
+                icon: iconSymbol,
                 x: x,
                 y: y,
-                page: pageNum, // Store the page number
-                width: currentIconSize * 24, // Default width
-                height: currentIconSize * 24 // Default height
+                page: pageNum,
+                width: baseSize * currentIconSize,
+                height: baseSize * currentIconSize,
             };
-
             annotations.push(annotation);
             renderAnnotations();
-            updateStatus(`Added ${icon} annotation to page ${pageNum}`);
+            updateStatus(`Added ${iconSymbol} icon to page ${pageNum}`);
         }
 
         function addTextBox(x, y, pageNum) {
             const annotation = {
-                id: Date.now() + Math.random(), // Unique ID
+                id: Date.now() + Math.random().toString(36).substr(2, 9),
                 type: 'textbox',
                 text: 'Type here...',
                 x: x,
                 y: y,
-                page: pageNum, // Store the page number
-                width: 150,  // Default width for textbox
-                height: 40   // Default height for textbox
+                page: pageNum,
+                width: 150, // Default width
+                height: 50  // Default height
             };
-
             annotations.push(annotation);
             renderAnnotations();
-
-            setTimeout(() => { // Ensure element exists in DOM before focus
+            setTimeout(() => {
                 const element = document.querySelector(`[data-id="${annotation.id}"]`);
                 if (element && element.tagName === 'TEXTAREA') {
                     element.focus();
@@ -595,20 +497,13 @@
         }
 
         function renderAnnotations() {
-            const layers = document.querySelectorAll('.annotation-layer'); // Get all annotation layers
-
-            layers.forEach(layer => layer.innerHTML = ''); // Clear all layers first
+            document.querySelectorAll('.annotation-layer').forEach(layer => layer.innerHTML = '');
 
             annotations.forEach(annotation => {
-                // Find the correct layer for this annotation's page
                 const layer = document.querySelector(`.annotation-layer[data-page="${annotation.page}"]`);
-                if (!layer) {
-                    // console.warn(`No annotation layer found for page ${annotation.page}`);
-                    return; // Skip if layer doesn't exist for some reason
-                }
+                if (!layer) return;
 
                 let element;
-
                 if (annotation.type === 'textbox') {
                     element = document.createElement('textarea');
                     element.className = 'annotation textbox';
@@ -618,52 +513,49 @@
 
                     element.addEventListener('input', (e) => {
                         annotation.text = e.target.value;
+                        // Potentially save changes more frequently here or on blur
                     });
-
                     element.addEventListener('mousedown', (e) => {
-                        e.stopPropagation(); // Prevent parent drag
+                        e.stopPropagation(); // Prevent page drag or other underlying actions
                         selectAnnotation(annotation.id);
                     });
-                    // Update annotation data on textarea resize (native browser resize)
-                    element.addEventListener('mouseup', () => { // Or 'mousemove' if more responsive update needed
-                        annotation.width = parseInt(element.style.width);
-                        annotation.height = parseInt(element.style.height);
+                    // Update annotation data on textarea native resize completion
+                    element.addEventListener('mouseup', () => { // After native resize
+                        const computedStyle = getComputedStyle(element);
+                        annotation.width = parseInt(computedStyle.width);
+                        annotation.height = parseInt(computedStyle.height);
+                        // No need to call renderAnnotations() unless other elements depend on this size change
                     });
-
-                } else { // 'icon'
+                } else { // Icon
                     element = document.createElement('div');
                     element.className = 'annotation icon';
                     element.textContent = annotation.icon;
-                    // Use width for font size to make resize handle logic simpler
-                    element.style.fontSize = (annotation.width || (currentIconSize * 24)) + 'px';
+                    element.style.width = annotation.width + 'px';
+                    element.style.height = annotation.height + 'px';
+                    element.style.fontSize = Math.min(annotation.width, annotation.height) * 0.75 + 'px'; // Approx fit
 
                     const resizeHandle = document.createElement('div');
                     resizeHandle.className = 'resize-handle';
                     resizeHandle.addEventListener('mousedown', (e) => {
                         e.stopPropagation();
-                        startResize(e, annotation.id);
+                        startResize(e, annotation.id); // Specific resize for icons
                     });
                     element.appendChild(resizeHandle);
+
+                    element.addEventListener('mousedown', (e) => {
+                        if (e.target !== resizeHandle) {
+                           selectAnnotation(annotation.id);
+                           startDragAnnotation(e, annotation.id);
+                        }
+                    });
                 }
 
                 element.style.left = annotation.x + 'px';
                 element.style.top = annotation.y + 'px';
-                element.dataset.id = annotation.id; // Essential for identifying
+                element.dataset.id = annotation.id;
 
-                // Common event listeners for both types
-                element.addEventListener('mousedown', (e) => {
-                    // Don't start drag if clicking on resize handle or inside textbox for typing
-                    if (e.target.classList.contains('resize-handle') || annotation.type === 'textbox') {
-                        if (annotation.type === 'textbox') selectAnnotation(annotation.id); // Select textbox on mousedown
-                        return;
-                    }
-                    selectAnnotation(annotation.id);
-                    startDragAnnotation(e, annotation.id); // Pass ID for clarity
-                });
-
-                // For selection on click (especially if mousedown is mostly for dragging)
-                 element.addEventListener('click', (e) => {
-                    e.stopPropagation(); // Prevent click bubbling to document listener that deselects
+                element.addEventListener('click', (e) => { // Fallback selection
+                    e.stopPropagation();
                     selectAnnotation(annotation.id);
                 });
 
@@ -671,36 +563,49 @@
             });
         }
 
-
-        function startResize(e, annotationId) {
-            e.preventDefault();
+        function startResize(e, annotationId) { // For icons
+            e.preventDefault(); // Prevent text selection, etc.
             isResizing = true;
-            // selectAnnotation(annotationId); // Already selected or should be
             const annotation = annotations.find(a => a.id == annotationId);
             if (!annotation || annotation.type !== 'icon') {
                 isResizing = false;
                 return;
             }
+            selectAnnotation(annotationId); // Make sure it's visibly selected
 
             const element = document.querySelector(`[data-id="${annotationId}"]`);
             const startX = e.clientX;
-            // const startY = e.clientY; // Not always needed if resizing proportionally from width
+            const startY = e.clientY;
             const startWidth = annotation.width;
+            const startHeight = annotation.height;
+            const aspectRatio = startWidth / startHeight;
 
             function resize(moveEvent) {
                 if (!isResizing) return;
-                const deltaX = moveEvent.clientX - startX;
-                // For proportional resize, can just use deltaX or an average
-                const newWidth = Math.max(12, startWidth + deltaX); // Min width e.g. 12px
+                moveEvent.preventDefault();
 
-                annotation.width = newWidth;
-                annotation.height = newWidth; // Assuming square icons, keep proportional
+                const deltaX = moveEvent.clientX - startX;
+                const deltaY = moveEvent.clientY - startY;
+
+                if (moveEvent.shiftKey) { // Proportional resize
+                    let newWidth = startWidth + deltaX;
+                    let newHeight = newWidth / aspectRatio;
+                    // If Y delta leads to a larger change, prioritize that
+                    if (Math.abs(startHeight + deltaY - startHeight) > Math.abs(startWidth + deltaX - startWidth)) {
+                         newHeight = startHeight + deltaY;
+                         newWidth = newHeight * aspectRatio;
+                    }
+                    annotation.width = Math.max(10, newWidth);
+                    annotation.height = Math.max(10, newHeight);
+                } else { // Unlinked resize
+                    annotation.width = Math.max(10, startWidth + deltaX);
+                    annotation.height = Math.max(10, startHeight + deltaY);
+                }
 
                 if (element) {
-                    element.style.fontSize = newWidth + 'px';
-                    // If you have separate width/height for icons, update those too
-                    // element.style.width = newWidth + 'px';
-                    // element.style.height = newWidth + 'px';
+                    element.style.width = annotation.width + 'px';
+                    element.style.height = annotation.height + 'px';
+                    element.style.fontSize = Math.min(annotation.width, annotation.height) * 0.75 + 'px';
                 }
             }
 
@@ -708,8 +613,8 @@
                 isResizing = false;
                 document.removeEventListener('mousemove', resize);
                 document.removeEventListener('mouseup', stopResize);
-                // No need to re-render if live update was good, but good for data consistency
-                // renderAnnotations(); // Optional: if element style wasn't enough
+                updateStatus('Resized icon');
+                // Optional: renderAnnotations() if further adjustments are needed post-resize
             }
 
             document.addEventListener('mousemove', resize);
@@ -719,253 +624,165 @@
         function selectAnnotation(id) {
             selectedAnnotation = id;
             document.querySelectorAll('.annotation').forEach(el => {
-                if (el.dataset.id == id) {
-                    el.classList.add('selected');
-                } else {
-                    el.classList.remove('selected');
-                }
+                el.classList.toggle('selected', String(el.dataset.id) === String(id));
             });
-             // Update slider if selected annotation is an icon
-            const annotation = annotations.find(a => a.id == id);
+
+            const annotation = annotations.find(a => String(a.id) === String(id));
             if (annotation && annotation.type === 'icon') {
                 const sizeSlider = document.getElementById('size-slider');
-                // Assuming width is baseSize * sliderValue
-                // and default icon font size in CSS is effectively base 24px
-                // We need to calculate what slider value corresponds to current annotation.width
-                sizeSlider.value = annotation.width / 24; // if base icon is 24px
+                const baseSize = 24; // Base reference for slider value
+                // Slider reflects average relative size if disproportional, or one dimension
+                sizeSlider.value = ((annotation.width + annotation.height) / 2) / baseSize;
+            } else if (annotation && annotation.type === 'textbox') {
+                // Potentially update something on textbox selection if needed
             }
         }
 
-
-        function startDragAnnotation(e, annotationId) { // Added annotationId for clarity
-            if (isResizing) return; // Don't drag if resizing
-
+        function startDragAnnotation(e, annotationId) {
+            if (isResizing) return;
             const element = document.querySelector(`[data-id="${annotationId}"]`);
             if (!element) return;
-            // If it's a textbox, allow drag only if not clicking inside for text edit
-            // This check is better handled by textarea's own mousedown stopPropagation
-
+            // selection is typically handled by the mousedown that calls this
             isDragging = true;
-            // selectedAnnotation is already set by selectAnnotation
-
-            const rect = element.getBoundingClientRect(); // Element's position relative to viewport
-            // dragOffset should be relative to the element's origin
+            const rect = element.getBoundingClientRect();
             dragOffset.x = e.clientX - rect.left;
             dragOffset.y = e.clientY - rect.top;
-
             element.style.cursor = 'grabbing';
-
             document.addEventListener('mousemove', dragAnnotation);
             document.addEventListener('mouseup', stopDragAnnotation);
         }
 
         function dragAnnotation(e) {
             if (!isDragging || !selectedAnnotation || isResizing) return;
-
-            const annotation = annotations.find(a => a.id == selectedAnnotation);
+            const annotation = annotations.find(a => String(a.id) === String(selectedAnnotation));
             if (!annotation) return;
 
             const element = document.querySelector(`[data-id="${selectedAnnotation}"]`);
-            const layer = element.parentElement; // This should be the annotation-layer
+            if (!element) return; // Should not happen if selectedAnnotation is valid
+            const layer = element.parentElement; // The annotation-layer
             const layerRect = layer.getBoundingClientRect();
-
 
             let newX = e.clientX - layerRect.left - dragOffset.x;
             let newY = e.clientY - layerRect.top - dragOffset.y;
 
-            // Constrain to parent (annotation-layer) boundaries
             const elWidth = element.offsetWidth;
             const elHeight = element.offsetHeight;
-
             newX = Math.max(0, Math.min(newX, layer.offsetWidth - elWidth));
             newY = Math.max(0, Math.min(newY, layer.offsetHeight - elHeight));
 
             annotation.x = newX;
             annotation.y = newY;
-
-            if (element) {
-                element.style.left = newX + 'px';
-                element.style.top = newY + 'px';
-            }
+            element.style.left = newX + 'px';
+            element.style.top = newY + 'px';
         }
 
         function stopDragAnnotation() {
             if (!isDragging) return;
             isDragging = false;
-
             const element = document.querySelector(`[data-id="${selectedAnnotation}"]`);
             if (element) {
                 element.style.cursor = 'move'; // Reset cursor
             }
-
             document.removeEventListener('mousemove', dragAnnotation);
             document.removeEventListener('mouseup', stopDragAnnotation);
-            // Data (annotation.x, annotation.y) already updated in dragAnnotation
-            // renderAnnotations(); // Not strictly necessary if direct style manipulation is enough
         }
 
-
-        // Size slider functionality
         document.getElementById('size-slider').addEventListener('input', (e) => {
-            currentIconSize = parseFloat(e.target.value); // This is a multiplier
+            currentIconSize = parseFloat(e.target.value);
+            const baseSize = 24;
 
             if (selectedAnnotation) {
-                const annotation = annotations.find(a => a.id == selectedAnnotation);
+                const annotation = annotations.find(a => String(a.id) === String(selectedAnnotation));
                 if (annotation && annotation.type === 'icon') {
-                    const baseSize = 24; // Assuming a base icon size to scale
                     annotation.width = baseSize * currentIconSize;
-                    annotation.height = baseSize * currentIconSize; // Keep proportional
-                    renderAnnotations(); // Re-render to apply size change and redraw handles correctly
+                    annotation.height = baseSize * currentIconSize; // Slider maintains proportion
+                    renderAnnotations(); // Re-render to apply size
                 }
             }
         });
 
-        // Icon palette drag functionality
         document.querySelectorAll('.icon-item').forEach(item => {
-            item.draggable = true; // Ensure items are draggable
+            item.draggable = true;
             item.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', item.dataset.icon || item.textContent.trim());
                 e.dataTransfer.effectAllowed = 'copy';
-                 // Optional: Create a drag preview
-                const dragPreview = item.cloneNode(true);
-                dragPreview.style.position = "absolute";
-                dragPreview.style.top = "-1000px"; // Hide it initially
-                dragPreview.classList.add('drag-preview'); // Use this class if you want specific styling
-                document.body.appendChild(dragPreview);
-                e.dataTransfer.setDragImage(dragPreview, 25, 25); // 25,25 is offset of cursor from top-left
-                // Clean up preview after drag
-                setTimeout(() => document.body.removeChild(dragPreview), 0);
             });
         });
 
-        // File input event listener
         document.getElementById('pdf-file').addEventListener('change', function(e) {
-            if (e.target.files.length > 0) {
-                // Reset state for new PDF
-                annotations = [];
-                selectedAnnotation = null;
-                pdfDoc = null;
-                document.getElementById('pdf-viewer').innerHTML = '<div class="no-pdf"><div style="font-size: 48px; margin-bottom: 20px;">📄</div><div>Upload a PDF file to start annotating</div></div>'; // Reset view
+             if (e.target.files.length > 0) {
+                annotations = []; selectedAnnotation = null; pdfDoc = null;
+                document.getElementById('pdf-viewer').innerHTML = '<div class="no-pdf"><div style="font-size: 48px; margin-bottom: 20px;">📄</div><div>Upload a PDF file to start annotating</div></div>';
                 document.getElementById('filename').textContent = '';
                 document.getElementById('page-info').textContent = '';
-
                 loadPDF(e.target.files[0]);
             }
         });
 
-        // --- DELETION AND CLEARING ---
-        // --- This is the "updated" / correct section as per our discussion ---
+        document.getElementById('clear-btn').addEventListener('click', clearAnnotations);
 
-        // Clear button event listener
-        document.getElementById('clear-btn').addEventListener('click', function() {
-            clearAnnotations(); // Call the existing clearAnnotations function
-        });
-
-        // Keyboard shortcuts - Handles Delete/Backspace for selected annotations
         document.addEventListener('keydown', (e) => {
-            // console.log('Key pressed:', e.key, 'Selected annotation:', selectedAnnotation); // For debugging
-
             if (selectedAnnotation && (e.key === 'Delete' || e.key === 'Backspace')) {
                 const activeElement = document.activeElement;
-                const isEditingTextbox = activeElement &&
-                    activeElement.tagName === 'TEXTAREA' &&
-                    activeElement.dataset.id == selectedAnnotation; // Make sure dataset.id comparison is sound
-
-                // console.log('Active element:', activeElement, 'Is editing textbox:', isEditingTextbox); // For debugging
-
+                const isEditingTextbox = activeElement && activeElement.tagName === 'TEXTAREA' && String(activeElement.dataset.id) === String(selectedAnnotation);
                 if (!isEditingTextbox) {
-                    e.preventDefault(); // Prevent default browser action (e.g., backspace navigation)
+                    e.preventDefault();
                     deleteSelectedAnnotation();
                 }
             }
         });
 
-        // Function to delete selected annotation
         function deleteSelectedAnnotation() {
             if (!selectedAnnotation) return;
-
             const annotationIndex = annotations.findIndex(a => String(a.id) === String(selectedAnnotation));
-            // console.log(`Attempting to delete: ${selectedAnnotation}, Index found: ${annotationIndex}`); // For debugging
-
-
             if (annotationIndex !== -1) {
                 const deletedAnnotation = annotations[annotationIndex];
                 annotations.splice(annotationIndex, 1);
-                selectedAnnotation = null; // Deselect
-                renderAnnotations(); // Refresh the view
-                updateStatus(`Deleted ${deletedAnnotation.type === 'textbox' ? 'text box' : 'icon'} annotation`);
-            } else {
-                // console.warn(`Annotation with ID ${selectedAnnotation} not found for deletion.`); // For debugging
-            }
-        }
-
-        // Clear annotations function
-        function clearAnnotations() {
-            if (annotations.length === 0) {
-                updateStatus('No annotations to clear');
-                return;
-            }
-
-            if (confirm(`Clear all ${annotations.length} annotations? This cannot be undone.`)) {
-                annotations = [];
                 selectedAnnotation = null;
-                renderAnnotations(); // Refresh the view (will be empty)
-                updateStatus('All annotations cleared');
+                renderAnnotations();
+                updateStatus(`Deleted ${deletedAnnotation.type} annotation`);
             }
         }
-        // --- END OF DELETION AND CLEARING SECTION ---
 
+        function clearAnnotations() {
+            if (annotations.length === 0) { updateStatus('No annotations to clear'); return; }
+            if (confirm(`Clear all ${annotations.length} annotations? This cannot be undone.`)) {
+                annotations = []; selectedAnnotation = null; renderAnnotations(); updateStatus('All annotations cleared');
+            }
+        }
 
-        // Save annotations
+        document.getElementById('save-btn').addEventListener('click', saveAnnotations);
         function saveAnnotations() {
-            if (!pdfDoc) {
-                updateStatus('Please load a PDF first.');
-                return;
-            }
-            if (annotations.length === 0) {
-                updateStatus('No annotations to save.');
-                return;
-            }
-
+            if (!pdfDoc) { updateStatus('Please load a PDF first.'); return; }
+            if (annotations.length === 0) { updateStatus('No annotations to save.'); return; }
             const data = {
                 pdfName: document.getElementById('filename').textContent || 'unknown.pdf',
                 timestamp: new Date().toISOString(),
                 annotations: annotations,
             };
-
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            const filenameBase = (pdfDoc && document.getElementById('filename').textContent)
-                                 ? document.getElementById('filename').textContent.replace(/\.pdf$/i, '')
-                                 : 'annotations';
+            const filenameBase = (pdfDoc && document.getElementById('filename').textContent) ? document.getElementById('filename').textContent.replace(/\.pdf$/i, '') : 'annotations';
             a.download = `${filenameBase}_annotations.json`;
             document.body.appendChild(a); // Required for Firefox
             a.click();
             document.body.removeChild(a); // Clean up
             URL.revokeObjectURL(url);
-
             updateStatus(`Saved ${annotations.length} annotations.`);
         }
 
-        // Click outside to deselect
         document.addEventListener('click', (e) => {
-            // If the click is directly on the pdf-viewer or a page-container, deselect.
-            // But not if it's on an annotation itself (handled by annotation's own click listener stopping propagation).
-            if (!e.target.closest('.annotation') && !e.target.closest('.sidebar')) { // Also avoid deselect if clicking sidebar
-                 // console.log("Deselecting due to click outside"); // For debugging
+            if (!e.target.closest('.annotation') && !e.target.closest('.sidebar')) {
                 if(selectedAnnotation) {
-                    const previouslySelected = document.querySelector(`.annotation.selected`);
+                    const previouslySelected = document.querySelector(`.annotation.selected[data-id="${selectedAnnotation}"]`);
                     if (previouslySelected) previouslySelected.classList.remove('selected');
                     selectedAnnotation = null;
                 }
             }
         });
-
-        // Initial status
-        updateStatus("Ready to load PDF. Drag icons from the left onto a PDF page.");
-
+        updateStatus("Ready to annotate. Upload a PDF.");
     </script>
 </body>
 </html>
